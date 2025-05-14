@@ -2,8 +2,11 @@ import { Reporter, TestCase, TestResult, FullConfig, Suite } from '@playwright/t
 import * as path from 'path';
 import * as fs from 'fs';
 import * as crypto from 'crypto';
-import { mailer } from './mailer';
 import * as nodemailer from 'nodemailer';
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
 
 // Define our own attachment interface since nodemailer types are not working
 interface EmailAttachment {
@@ -30,6 +33,60 @@ interface TestRunSummary {
   duration: number;
 }
 
+// Mailer class implementation
+class Mailer {
+  private transporter: nodemailer.Transporter;
+
+  constructor() {
+    this.transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.GMAIL_USER,
+        pass: process.env.GMAIL_APP_PASSWORD,
+      },
+    });
+  }
+
+  isConfigured(): boolean {
+    return !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD);
+  }
+
+  getRecipients(): string[] {
+    return process.env.TEST_TEAM_EMAILS?.split(',').filter(Boolean) || [];
+  }
+
+  async sendEmail(
+    recipients: string[],
+    subject: string,
+    html: string,
+    attachments?: nodemailer.Attachment[]
+  ): Promise<void> {
+    if (!this.isConfigured()) {
+      throw new Error('Email configuration is not set up. Please check your .env file.');
+    }
+
+    const mailOptions: nodemailer.SendMailOptions = {
+      from: process.env.GMAIL_USER,
+      to: recipients.join(','),
+      subject,
+      html,
+      attachments,
+    };
+
+    try {
+      const info = await this.transporter.sendMail(mailOptions);
+      console.log(`Email sent successfully: ${info.messageId}`);
+    } catch (error) {
+      console.error('Failed to send email:', error);
+      throw error;
+    }
+  }
+}
+
+// Create a single instance of Mailer
+export const mailer = new Mailer();
+
+// EmailReporter implementation
 export class EmailReporter implements Reporter {
   private failedTests: TestResultWithDetails[] = [];
   private passedTests: TestResultWithDetails[] = [];
@@ -100,7 +157,7 @@ export class EmailReporter implements Reporter {
         await this.sendFailureReport(recipients);
       } else {
         await this.sendSuccessReport(recipients);
-        }
+      }
     } catch (error) {
       console.error('Failed to send email report:', error);
     }
@@ -235,17 +292,17 @@ export class EmailReporter implements Reporter {
       `;
     }));
 
-    // Generate email HTML
+    // Generate email HTML using the template
     const emailHtml = this.generateEmailTemplate({
       isSuccess: false,
       title: '❌ Playwright Test Failure Report',
       content: `
- ${summarySection}
-          
-          <div class="failure-details">
-            <h2>Failed Tests (${this.failedTests.length})</h2>
-            ${failureDetails.join('')}
-          </div>
+        ${summarySection}
+        
+        <div class="failure-details">
+          <h2>Failed Tests (${this.failedTests.length})</h2>
+          ${failureDetails.join('')}
+        </div>
       `
     });
 
@@ -287,22 +344,22 @@ export class EmailReporter implements Reporter {
       `;
     }).join('');
 
-    // Generate email HTML
+    // Generate email HTML using the template
     const emailHtml = this.generateEmailTemplate({
       isSuccess: true,
       title: '✅ Playwright Test Success Report',
       content: `
-       <div class="success-message">
-            <h2>All Tests Passed Successfully! 🎉</h2>
-            <p>All ${this.testRunSummary.passedTests} tests have completed successfully without any failures.</p>
-          </div>
-          
-          ${summarySection}
-          
-          <div class="success-details">
-            <h2>Passed Tests (${this.passedTests.length})</h2>
-            ${passedTestsHtml}
-          </div>
+        <div class="success-message">
+          <h2>All Tests Passed Successfully! 🎉</h2>
+          <p>All ${this.testRunSummary.passedTests} tests have completed successfully without any failures.</p>
+        </div>
+        
+        ${summarySection}
+        
+        <div class="success-details">
+          <h2>Passed Tests (${this.passedTests.length})</h2>
+          ${passedTestsHtml}
+        </div>
       `
     });
 

@@ -45,12 +45,10 @@ test('test', async ({ page }) => {
 
  
 
-  await page.getByRole('button', { name: 'Next >>' }).click();
 
   await page.locator('.giphy-gif').first().click();
 
 
-  await page.getByRole('textbox', { name: 'Search for the amazing images' }).press('Enter');
 
   await expect(page).toHaveURL('https://www.cheerchampion.com/kudo/recipients');
 

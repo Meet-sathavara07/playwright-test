@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    :root {
+      --primary-color: {{primaryColor}};
+      --secondary-color: #457b9d;
+      --background-color: #ffffff;
+      --success-color: #2a9d8f;
+      --warning-color: #e9c46a;
+      --text-color: #1d3557;
+      --light-text: #ffffff;
+      --border-color: #a8dadc;
+      --card-bg: #ffffff;
+      --code-bg: #f8f9fa;
+      --error-bg: #fff5f5;
+      --error-text: #e63946;
+      --success-bg: #f0fdf4;
+      --success-text: #2a9d8f;
+      --warning-bg: #fff7ed;
+      --warning-text: #e9c46a;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      color: var(--text-color);
+      background-color: var(--background-color);
+      margin: 0;
+      padding: 0;
+    }
+    
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: white;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+
+    .header {
+      background-color: var(--primary-color);
+      color: var(--light-text);
+      padding: 20px;
+      text-align: center;
+      border-radius: 5px 5px 0 0;
+      margin-bottom: 20px;
+    }
+    
+    .header h1 {
+      margin: 0;
+      font-size: 24px;
+      color: var(--light-text);
+      text-align: center;
+    }
+    
+    .summary {
+      background-color: var(--card-bg);
+      padding: 15px;
+      margin: 0 auto 20px;
+      border-radius: 5px;
+      border-left: 4px solid var(--secondary-color);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      text-align: center;
+      max-width: 600px;
+    }
+    
+    .summary-title {
+      text-align: center;
+      margin-bottom: 15px;
+      color: var(--text-color);
+    }
+    
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-top: 15px;
+    }
+    
+    .summary-card {
+      padding: 10px;
+      border-radius: 5px;
+      text-align: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .summary-card h3 {
+      margin: 0;
+      font-size: 16px;
+      color: inherit;
+      text-align: center;
+    }
+    
+    .summary-card .number {
+      font-size: 28px;
+      font-weight: bold;
+      margin: 10px 0;
+      color: inherit;
+      text-align: center;
+    }
+
+    .failure-details, .success-details {
+      text-align: left;
+      margin: 0 auto;
+      max-width: 800px;
+      font-size: 14px;
+    }
+
+    .failure-details h2, .success-details h2 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    
+    .test-failure, .test-success {
+      background-color: var(--card-bg);
+      margin-bottom: 20px;
+      padding: 15px;
+      border-radius: 5px;
+      border-left: 4px solid var(--primary-color);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .test-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 10px;
+    }
+    
+    .test-header h3 {
+      margin: 0;
+      font-size: 18px;
+      text-align: left;
+    }
+    
+    .test-meta {
+      display: flex;
+      gap: 8px;
+    }
+
+    .project-badge, .duration-badge {
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      color: var(--light-text);
+    }
+    
+    .project-badge {
+      background-color: var(--secondary-color);
+    }
+    
+    .duration-badge {
+      background-color: var(--text-color);
+    }
+    
+    .test-path, .test-location {
+      margin-bottom: 8px;
+      font-size: 14px;
+      color: var(--text-color);
+      text-align: left;
+    }
+
+    .label {
+      font-weight: bold;
+      color: var(--secondary-color);
+    }
+    
+    .retry-info {
+      background-color: var(--warning-bg);
+      color: var(--warning-text);
+      padding: 5px 10px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+    
+    .error-section {
+      text-align: left;
+      margin: 15px 0;
+    }
+    
+    .error-section h4 {
+      text-align: left;
+      margin-top: 0;
+      margin-bottom: 8px;
+      color: var(--secondary-color);
+    }
+    
+    .error-message {
+      text-align: left;
+      margin: 10px 0;
+      background-color: var(--error-bg);
+      color: var(--error-text);
+      padding: 10px;
+      border-radius: 4px;
+      white-space: pre-wrap;
+      font-family: monospace;
+      overflow-x: auto;
+    }
+    
+    .stack-trace {
+      text-align: left;
+      margin: 10px 0;
+      background-color: var(--code-bg);
+      padding: 10px;
+      border-radius: 4px;
+      white-space: pre-wrap;
+      font-family: monospace;
+      font-size: 12px;
+      overflow-x: auto;
+      color: var(--text-color);
+    }
+    
+    .test-steps {
+      text-align: left;
+      margin: 15px 0;
+    }
+    
+    .test-step {
+      text-align: left;
+      margin: 5px 0;
+      padding: 8px;
+      border-left: 3px solid var(--secondary-color);
+      background-color: var(--code-bg);
+      font-family: monospace;
+      font-size: 13px;
+      color: var(--text-color);
+    }
+    
+    .attachments-section {
+      text-align: left;
+      margin: 15px 0;
+    }
+    
+    .attachments-section h4 {
+      text-align: left;
+      margin-top: 0;
+      margin-bottom: 8px;
+      color: var(--secondary-color);
+    }
+    
+    .screenshot, .video {
+      margin: 15px 0;
+    }
+
+    .screenshot img {
+      max-width: 100%;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .video video {
+      max-width: 100%;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .video-link {
+      text-align: left;
+      margin: 10px 0;
+      background-color: var(--code-bg);
+      padding: 10px;
+      border-radius: 4px;
+      color: var(--text-color);
+    }
+    
+    .footer {
+      margin-top: 30px;
+      padding-top: 15px;
+      border-top: 1px solid var(--border-color);
+      font-size: 12px;
+      color: var(--text-color);
+      text-align: center;
+    }
+    
+    .footer p {
+      margin: 5px 0;
+      text-align: center;
+    }
+
+    .success-message {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .success-message h2 {
+      color: var(--success-color);
+    }
+
+    @media (max-width: 600px) {
+      .summary-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>{{title}}</h1>
+    </div>
+    
+    {{content}}
+    
+    <div class="footer">
+      <p>This is an automated message from the Playwright Test Runner.</p>
+      <p>Generated on: {{generatedDate}}</p>
+      <p>Test run completed in: {{testDuration}}</p>
+    </div>
+  </div>
+</body>
+</html>
