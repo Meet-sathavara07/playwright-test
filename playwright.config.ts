@@ -15,7 +15,7 @@ export default defineConfig({
   reporter: [
     ['html'],
     ['line'],
-    ['./reports/email-reporter.ts']  // Add our custom email reporter
+    ['./reports/email-reporter.ts']  
   ],
   
   projects: [
@@ -29,6 +29,6 @@ export default defineConfig({
   use: {
     trace: "on-first-retry",
     video: "on",
-    screenshot: "on", // Take screenshots on failures
+    screenshot: "on", 
   },
 });
