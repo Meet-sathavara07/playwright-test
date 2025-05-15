@@ -1,3 +1,4 @@
+/* eslint-disable testing-library/prefer-screen-queries */
 import { test, expect } from "@playwright/test";
 
 test("user login and send and view a kudo", async ({ page }) => {
@@ -51,6 +52,6 @@ test("user login and send and view a kudo", async ({ page }) => {
   await page.getByRole("button", { name: "Send" }).click();
 
   await page.getByRole("link", { name: "Go To Feed" }).click();
-  await expect(page).toHaveURL("https://www.cheerchampion.com/feeds");
+  await expect(page).toHaveURL("https://www.cheerchampion.com/feeds-stop");
 
 });
