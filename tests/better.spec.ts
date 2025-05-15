@@ -76,7 +76,7 @@ test("user login and send and view a kudo", async ({ page }) => {
   await page.getByRole('button', { name: 'Delete' }).click();
 
 
-  await page.getByRole('button', { name: 'profile' }).click();
+  await page.getByRole('button', { name: 'scsc' }).click();
   await page.getByRole('button', { name: 'Sign out' }).click();
 });
 

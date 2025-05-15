@@ -20,13 +20,6 @@ jobs:
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
       
-      - name: Debug environment variables
-        run: |
-          echo "GMAIL_USER secret exists: ${{ secrets.GMAIL_USER != '' }}"
-          echo "GMAIL_APP_PASSWORD secret exists: ${{ secrets.GMAIL_APP_PASSWORD != '' }}"
-          echo "TEST_TEAM_EMAILS secret exists: ${{ secrets.TEST_TEAM_EMAILS != '' }}"
-          echo "MAX_VIDEO_SIZE_MB secret exists: ${{ secrets.MAX_VIDEO_SIZE_MB != '' }}"
-      
       - name: Run Playwright tests
         run: npx playwright test
         env:
