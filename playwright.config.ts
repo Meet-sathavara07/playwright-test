@@ -3,9 +3,9 @@ import EmailReporter from "./reports/email-reporter";
 
 export default defineConfig({
   testDir: "./tests",
-  timeout: 3000 * 1000,
+  timeout: 6 * 60 * 1000,
   expect: {
-    timeout: 5000,
+    timeout: 6000,
   },
   fullyParallel: false,
   forbidOnly: !!process.env.CI,

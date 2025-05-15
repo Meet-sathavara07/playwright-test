@@ -2,18 +2,18 @@
 import { test, expect } from "@playwright/test";
 
 test("user login and send and view a kudo", async ({ page }) => {
+
+
   await page.goto("https://www.cheerchampion.com");
 
+  //login in site
   await page.getByRole("link", { name: "Login" }).click();
-
   await expect(page).toHaveURL("https://www.cheerchampion.com/login");
-  await page.getByRole("button", { name: "Request OTP" }).isVisible();
 
-  await page
-    .getByRole("textbox", { name: "Email Id" })
-    .fill("cp@cheerchampion.com");
+
+  //fill the email and password
+  await page.getByRole("textbox", { name: "Email Id" }).fill("cp@cheerchampion.com");
   await page.getByRole("button", { name: "Request OTP" }).click();
-
   await page.getByText("cp@cheerchampion.com").isVisible();
   await page.getByRole("textbox", { name: "OTP" }).isVisible();
   await page.getByRole("button", { name: "Login/Signup" }).isVisible();
@@ -24,33 +24,32 @@ test("user login and send and view a kudo", async ({ page }) => {
 
   await expect(page).toHaveURL("https://www.cheerchampion.com");
 
-  await page
-    .getByRole("textbox", { name: "E.g. Hey Jen! You were" })
-    .isVisible();
-  await page.getByRole("textbox", { name: "E.g. Hey Jen! You were" }).click();
-  await page
-    .getByRole("textbox", { name: "E.g. Hey Jen! You were" })
-    .fill("test");
 
+  //send kudo-post
+  await page.getByRole("textbox", { name: "E.g. Hey Jen! You were" }).isVisible();
+  await page.getByRole("textbox", { name: "E.g. Hey Jen! You were" }).click();
+  await page.getByRole("textbox", { name: "E.g. Hey Jen! You were" }).fill("test");
   await page.getByRole("button", { name: "Next >>" }).click();
   await expect(page).toHaveURL("https://www.cheerchampion.com/kudo/library");
-
   await page.locator(".giphy-gif").first().click();
-
   await expect(page).toHaveURL("https://www.cheerchampion.com/kudo/recipients");
 
-  await page.getByRole("heading", { name: "Preview" }).isVisible();
+
+  //select the recipient
+  await page.getByRole("heading", { name: "laptop" }).isVisible();
   await page.getByRole("img", { name: "Image" }).isVisible();
 
   await page.getByRole("textbox", { name: "Email Id" }).isVisible();
   await page.getByRole("button", { name: "Send" }).isVisible();
-
   await page.getByRole("textbox", { name: "Email Id" }).click();
   await page.getByRole("textbox", { name: "Email Id" }).fill("raj.mansuri@quantuminfoway.com");
   await page.getByRole("button", { name: "Send" }).click();
 
   await page.getByRole("link", { name: "Go To Feed" }).click();
   await expect(page).toHaveURL("https://www.cheerchampion.com/feeds");
+
+
+  //view the kudo
 
   await page.locator('.bg-white > div > div').first().isVisible();
   await page.locator('div').filter({ hasText: /^Youto test_Raj$/ }).nth(1).isVisible();
@@ -71,11 +70,13 @@ test("user login and send and view a kudo", async ({ page }) => {
 
   await page.getByRole('button', { name: 'All' }).click();
 
+
+  //delete the kudo
   await page.locator('div:nth-child(2) > .rounded-full').first().click();
   await page.getByRole('button', { name: /Delete/i }).first().click();
   await page.getByRole('button', { name: 'Delete' }).click();
 
-
+  //sign out
   await page.getByRole('button', { name: 'profile' }).click();
   await page.getByRole('button', { name: 'Sign out' }).click();
 });
