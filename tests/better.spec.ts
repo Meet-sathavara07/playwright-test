@@ -36,7 +36,7 @@ test("user login and send and view a kudo", async ({ page }) => {
 
 
   //select the recipient
-  await page.getByRole("heading", { name: "laptop" }).isVisible();
+  await page.getByRole("heading", { name: "Preview" }).isVisible();
   await page.getByRole("img", { name: "Image" }).isVisible();
 
   await page.getByRole("textbox", { name: "Email Id" }).isVisible();
