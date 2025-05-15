@@ -46,13 +46,7 @@ class Mailer {
   private transporter: nodemailer.Transporter;
 
   constructor() {
-    console.log("Setting up email transporter");
-    console.log("GMAIL_USER env exists:", !!process.env.GMAIL_USER);
-    console.log(
-      "GMAIL_APP_PASSWORD env exists:",
-      !!process.env.GMAIL_APP_PASSWORD
-    );
-
+    
     try {
       this.transporter = nodemailer.createTransport({
         service: "gmail",
@@ -87,18 +81,6 @@ class Mailer {
     html: string,
     attachments?: nodemailer.Attachment[]
   ): Promise<void> {
-    console.log("Email configuration status:", this.isConfigured());
-    console.log("Email recipients:", recipients);
-    console.log("GMAIL_USER env variable exists:", !!process.env.GMAIL_USER);
-    console.log(
-      "GMAIL_APP_PASSWORD env variable exists:",
-      !!process.env.GMAIL_APP_PASSWORD
-    );
-    console.log(
-      "TEST_TEAM_EMAILS env variable value:",
-      process.env.TEST_TEAM_EMAILS
-    );
-
     if (!this.isConfigured()) {
       throw new Error(
         "Email configuration is not set up. Please check your .env file."
@@ -106,7 +88,7 @@ class Mailer {
     }
 
     const mailOptions: nodemailer.SendMailOptions = {
-      from: process.env.GMAIL_USER,
+      from: '"Playwright Test Reporter" <' + process.env.GMAIL_USER + ">",
       to: recipients.join(","),
       subject,
       html,
@@ -114,12 +96,7 @@ class Mailer {
     };
 
     try {
-      console.log("Attempting to send email with options:", {
-        from: mailOptions.from,
-        to: mailOptions.to,
-        subject: mailOptions.subject,
-        attachmentsCount: mailOptions.attachments?.length || 0,
-      });
+      
       const info = await this.transporter.sendMail(mailOptions);
       console.log(`Email sent successfully: ${info.messageId}`);
     } catch (error) {
@@ -175,7 +152,11 @@ export class EmailReporter implements Reporter {
     );
 
     // Optional: Clean up old artifacts (to avoid clutter)
-    const oldArtifactsDir = path.resolve(process.cwd(), "test-results", "email-artifacts");
+    const oldArtifactsDir = path.resolve(
+      process.cwd(),
+      "test-results",
+      "email-artifacts"
+    );
     if (fs.existsSync(oldArtifactsDir)) {
       try {
         fs.rmSync(oldArtifactsDir, { recursive: true, force: true });
@@ -225,7 +206,9 @@ export class EmailReporter implements Reporter {
     this.testRunSummary.passedTests = passedTestsArray.length;
     this.testRunSummary.skippedTests = skippedTestsArray.length;
     this.testRunSummary.totalTests =
-      failedTestsArray.length + passedTestsArray.length + skippedTestsArray.length;
+      failedTestsArray.length +
+      passedTestsArray.length +
+      skippedTestsArray.length;
 
     // Check if email configuration is valid
     if (!mailer.isConfigured()) {
@@ -248,7 +231,9 @@ export class EmailReporter implements Reporter {
       } else if (process.env.SEND_SUCCESS_EMAILS === "true") {
         await this.sendSuccessReport(recipients, passedTestsArray);
       } else {
-        console.log("Skipping success email due to SEND_SUCCESS_EMAIL facilitationsS=false");
+        console.log(
+          "Skipping success email due to SEND_SUCCESS_EMAIL facilitationsS=false"
+        );
       }
     } catch (error) {
       console.error("Failed to send email report:", error);
@@ -291,7 +276,10 @@ export class EmailReporter implements Reporter {
 
         // Check video size against MAX_VIDEO_SIZE_MB
         if (attachment.name === "video") {
-          const maxVideoSizeMB = parseInt(process.env.MAX_VIDEO_SIZE_MB || "100", 10);
+          const maxVideoSizeMB = parseInt(
+            process.env.MAX_VIDEO_SIZE_MB || "100",
+            10
+          );
           const stats = fs.statSync(attachment.path);
           const fileSizeMB = stats.size / (1024 * 1024);
           if (fileSizeMB > maxVideoSizeMB) {
@@ -338,39 +326,44 @@ export class EmailReporter implements Reporter {
     return contentTypeMap[contentType] || "";
   }
 
-  private async sendFailureReport(recipients: string[], failedTests: TestResultWithDetails[]) {
+  private async sendFailureReport(
+    recipients: string[],
+    failedTests: TestResultWithDetails[]
+  ) {
     // Create summary section with stats
     const summarySection = this.createSummarySection();
 
     // Create HTML for failed tests with detailed information
     const failureDetails = await Promise.all(
-      failedTests.map(async ({ test, result, projectName, savedAttachments }) => {
-        const error = result.errors[0];
-        const errorMessage = error?.message || "Unknown error";
-        const stackTrace = error?.stack || "No stack trace available";
+      failedTests.map(
+        async ({ test, result, projectName, savedAttachments }) => {
+          const error = result.errors[0];
+          const errorMessage = error?.message || "Unknown error";
+          const stackTrace = error?.stack || "No stack trace available";
 
-        // Format test title chain (including suite titles)
-        const titleChain = this.getTitleChain(test);
+          // Format test title chain (including suite titles)
+          const titleChain = this.getTitleChain(test);
 
-        // Get attachments (screenshot and video)
-        const { screenshotHtml, videoHtml } = await this.getAttachmentsHtml(
-          test,
-          result,
-          savedAttachments
-        );
+          // Get attachments (screenshot and video)
+          const { screenshotHtml, videoHtml } = await this.getAttachmentsHtml(
+            test,
+            result,
+            savedAttachments
+          );
 
-        // Format error message with better highlighting
-        const formattedError = this.formatErrorMessage(errorMessage);
+          // Format error message with better highlighting
+          const formattedError = this.formatErrorMessage(errorMessage);
 
-        // Format test steps if available
-        const stepsHtml = this.formatTestSteps(result);
+          // Format test steps if available
+          const stepsHtml = this.formatTestSteps(result);
 
-        // Include retry information
-        const retryInfo = result.retry > 0
-          ? `<div class="retry-info">Failed after ${result.retry} retry attempt(s)</div>`
-          : `<div class="retry-info">Failed on first attempt</div>`;
+          // Include retry information
+          const retryInfo =
+            result.retry > 0
+              ? `<div class="retry-info">Failed after ${result.retry} retry attempt(s)</div>`
+              : `<div class="retry-info">Failed on first attempt</div>`;
 
-        return `
+          return `
         <div class="test-failure">
           <div class="test-header">
             <h3>❌ Failed Test: ${test.title}</h3>
@@ -418,7 +411,8 @@ export class EmailReporter implements Reporter {
           </div>
         </div>
       `;
-      })
+        }
+      )
     );
 
     // Generate email HTML using the template
@@ -451,7 +445,10 @@ export class EmailReporter implements Reporter {
     }
   }
 
-  private async sendSuccessReport(recipients: string[], passedTests: TestResultWithDetails[]) {
+  private async sendSuccessReport(
+    recipients: string[],
+    passedTests: TestResultWithDetails[]
+  ) {
     // Create summary section with stats
     const summarySection = this.createSummarySection();
 
@@ -459,9 +456,10 @@ export class EmailReporter implements Reporter {
     const passedTestsHtml = passedTests
       .map(({ test, result, projectName }) => {
         // Include retry information for passed tests
-        const retryInfo = result.retry > 0
-          ? `<div class="retry-info">Passed after ${result.retry} retry attempt(s)</div>`
-          : `<div class="retry-info">Passed on first attempt</div>`;
+        const retryInfo =
+          result.retry > 0
+            ? `<div class="retry-info">Passed after ${result.retry} retry attempt(s)</div>`
+            : `<div class="retry-info">Passed on first attempt</div>`;
 
         return `
         <div class="test-success">
@@ -1014,6 +1012,8 @@ export class EmailReporter implements Reporter {
             <p>Test run completed in: ${this.formatDuration(
               this.testRunSummary.duration
             )}</p>
+            <p>For issues, contact: <a href="mailto:support@yourcompany.com">support@yourcompany.com</a></p>
+            <p>&copy; 2025 Your Company Name. All rights reserved.</p>
           </div>
         </div>
       </body>

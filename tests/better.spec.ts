@@ -8,7 +8,7 @@ test("user login and send and view a kudo", async ({ page }) => {
 
   //login in site
   await page.getByRole("link", { name: "Login" }).click();
-  await expect(page).toHaveURL("https://www.cheerchampion.com/login");
+  await expect(page).toHaveURL("https://www.cheerchampion.com/loginer");
 
 
   //fill the email and password
