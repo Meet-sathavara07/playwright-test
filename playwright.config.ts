@@ -11,13 +11,9 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
-  
-  reporter: [
-    ['html'],
-    ['line'],
-    ['./reports/email-reporter.ts']  
-  ],
-  
+
+  reporter: [["html"], ["line"], ["./reports/email-reporter.ts"]],
+
   projects: [
     {
       name: "chromium",
@@ -28,7 +24,7 @@ export default defineConfig({
   ],
   use: {
     trace: "on-first-retry",
-    video: "on",
-    screenshot: "on", 
+    video: "retain-on-failure",
+    screenshot: "only-on-failure",
   },
 });

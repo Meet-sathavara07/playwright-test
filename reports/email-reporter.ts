@@ -41,36 +41,41 @@ interface TestRunSummary {
   duration: number;
 }
 
-// Mailer class implementation
+// Mailer class (unchanged)
 class Mailer {
   private transporter: nodemailer.Transporter;
 
   constructor() {
-  console.log('Setting up email transporter');
-  console.log('GMAIL_USER env exists:', !!process.env.GMAIL_USER);
-  console.log('GMAIL_APP_PASSWORD env exists:', !!process.env.GMAIL_APP_PASSWORD);
-  
-  try {
-    this.transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_APP_PASSWORD,
-      },
-    });
-    console.log('Email transporter created successfully');
-  } catch (error) {
-    console.error('Failed to create email transporter:', error);
-    throw error;
+    console.log("Setting up email transporter");
+    console.log("GMAIL_USER env exists:", !!process.env.GMAIL_USER);
+    console.log(
+      "GMAIL_APP_PASSWORD env exists:",
+      !!process.env.GMAIL_APP_PASSWORD
+    );
+
+    try {
+      this.transporter = nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+          user: process.env.GMAIL_USER,
+          pass: process.env.GMAIL_APP_PASSWORD,
+        },
+      });
+      console.log("Email transporter created successfully");
+    } catch (error) {
+      console.error("Failed to create email transporter:", error);
+      throw error;
+    }
   }
-}
 
   isConfigured(): boolean {
-  const hasUser = !!process.env.GMAIL_USER;
-  const hasPassword = !!process.env.GMAIL_APP_PASSWORD;
-  console.log(`Email config check - User: ${hasUser}, Password: ${hasPassword}`);
-  return hasUser && hasPassword;
-}
+    const hasUser = !!process.env.GMAIL_USER;
+    const hasPassword = !!process.env.GMAIL_APP_PASSWORD;
+    console.log(
+      `Email config check - User: ${hasUser}, Password: ${hasPassword}`
+    );
+    return hasUser && hasPassword;
+  }
 
   getRecipients(): string[] {
     return process.env.TEST_TEAM_EMAILS?.split(",").filter(Boolean) || [];
@@ -129,9 +134,10 @@ export const mailer = new Mailer();
 
 // EmailReporter implementation
 export class EmailReporter implements Reporter {
-  private failedTests: TestResultWithDetails[] = [];
-  private passedTests: TestResultWithDetails[] = [];
-  private skippedTests: TestResultWithDetails[] = [];
+  // Use Maps instead of arrays to store unique test results
+  private failedTests: Map<string, TestResultWithDetails> = new Map();
+  private passedTests: Map<string, TestResultWithDetails> = new Map();
+  private skippedTests: Map<string, TestResultWithDetails> = new Map();
   private testRunSummary: TestRunSummary = {
     totalTests: 0,
     passedTests: 0,
@@ -143,6 +149,11 @@ export class EmailReporter implements Reporter {
   private config!: FullConfig;
   private outputDir: string = "";
   private artifactsDir: string = "";
+
+  // Generate a unique ID for each test to track retries
+  private getTestId(test: TestCase): string {
+    return `${test.parent.title}:${test.title}:${test.location.file}`;
+  }
 
   onBegin(config: FullConfig, suite: Suite) {
     this.config = config;
@@ -162,29 +173,59 @@ export class EmailReporter implements Reporter {
     console.log(
       `EmailReporter: Artifacts will be saved to ${this.artifactsDir}`
     );
+
+    // Optional: Clean up old artifacts (to avoid clutter)
+    const oldArtifactsDir = path.resolve(process.cwd(), "test-results", "email-artifacts");
+    if (fs.existsSync(oldArtifactsDir)) {
+      try {
+        fs.rmSync(oldArtifactsDir, { recursive: true, force: true });
+        console.log("Cleaned up old email artifacts");
+      } catch (error) {
+        console.error("Failed to clean up old artifacts:", error);
+      }
+    }
   }
 
   async onTestEnd(test: TestCase, result: TestResult) {
+    const testId = this.getTestId(test);
     const projectName = test.parent.project()?.name || "unknown";
     const testInfo: TestResultWithDetails = { test, result, projectName };
 
-    // Only save attachments for failed tests
+    // Only save attachments for failed tests, and only for the last retry
     if (result.status === "failed") {
-      testInfo.savedAttachments = await this.saveAttachments(test, result);
-      this.failedTests.push(testInfo);
-      this.testRunSummary.failedTests++;
+      // Save attachments only if this is the last retry or no further retries
+      if (result.retry === test.retries || test.retries === 0) {
+        testInfo.savedAttachments = await this.saveAttachments(test, result);
+      }
+      this.failedTests.set(testId, testInfo);
+      this.passedTests.delete(testId);
+      this.skippedTests.delete(testId);
     } else if (result.status === "passed") {
-      this.passedTests.push(testInfo);
-      this.testRunSummary.passedTests++;
+      this.passedTests.set(testId, testInfo);
+      this.failedTests.delete(testId);
+      this.skippedTests.delete(testId);
     } else if (result.status === "skipped") {
-      this.skippedTests.push(testInfo);
-      this.testRunSummary.skippedTests++;
+      this.skippedTests.set(testId, testInfo);
+      this.failedTests.delete(testId);
+      this.passedTests.delete(testId);
     }
   }
 
   async onEnd() {
     // Calculate test run duration
     this.testRunSummary.duration = Date.now() - this.startTime;
+
+    // Convert Maps to arrays for processing
+    const failedTestsArray = Array.from(this.failedTests.values());
+    const passedTestsArray = Array.from(this.passedTests.values());
+    const skippedTestsArray = Array.from(this.skippedTests.values());
+
+    // Update test run summary
+    this.testRunSummary.failedTests = failedTestsArray.length;
+    this.testRunSummary.passedTests = passedTestsArray.length;
+    this.testRunSummary.skippedTests = skippedTestsArray.length;
+    this.testRunSummary.totalTests =
+      failedTestsArray.length + passedTestsArray.length + skippedTestsArray.length;
 
     // Check if email configuration is valid
     if (!mailer.isConfigured()) {
@@ -202,10 +243,12 @@ export class EmailReporter implements Reporter {
 
     try {
       // Send appropriate report based on test results
-      if (this.failedTests.length > 0) {
-        await this.sendFailureReport(recipients);
+      if (failedTestsArray.length > 0) {
+        await this.sendFailureReport(recipients, failedTestsArray);
+      } else if (process.env.SEND_SUCCESS_EMAILS === "true") {
+        await this.sendSuccessReport(recipients, passedTestsArray);
       } else {
-        await this.sendSuccessReport(recipients);
+        console.log("Skipping success email due to SEND_SUCCESS_EMAIL facilitationsS=false");
       }
     } catch (error) {
       console.error("Failed to send email report:", error);
@@ -246,6 +289,21 @@ export class EmailReporter implements Reporter {
         const fileName = `${attachment.name}${fileExt}`;
         const destPath = path.join(testDir, fileName);
 
+        // Check video size against MAX_VIDEO_SIZE_MB
+        if (attachment.name === "video") {
+          const maxVideoSizeMB = parseInt(process.env.MAX_VIDEO_SIZE_MB || "100", 10);
+          const stats = fs.statSync(attachment.path);
+          const fileSizeMB = stats.size / (1024 * 1024);
+          if (fileSizeMB > maxVideoSizeMB) {
+            console.log(
+              `Skipping video attachment ${fileName}: Size ${fileSizeMB.toFixed(
+                2
+              )}MB exceeds limit of ${maxVideoSizeMB}MB`
+            );
+            continue;
+          }
+        }
+
         // Copy file to our artifacts directory
         fs.copyFileSync(attachment.path, destPath);
         console.log(`Saved ${attachment.name} to ${destPath}`);
@@ -280,41 +338,39 @@ export class EmailReporter implements Reporter {
     return contentTypeMap[contentType] || "";
   }
 
-  private async sendFailureReport(recipients: string[]) {
+  private async sendFailureReport(recipients: string[], failedTests: TestResultWithDetails[]) {
     // Create summary section with stats
     const summarySection = this.createSummarySection();
 
     // Create HTML for failed tests with detailed information
     const failureDetails = await Promise.all(
-      this.failedTests.map(
-        async ({ test, result, projectName, savedAttachments }) => {
-          const error = result.errors[0];
-          const errorMessage = error?.message || "Unknown error";
-          const stackTrace = error?.stack || "No stack trace available";
+      failedTests.map(async ({ test, result, projectName, savedAttachments }) => {
+        const error = result.errors[0];
+        const errorMessage = error?.message || "Unknown error";
+        const stackTrace = error?.stack || "No stack trace available";
 
-          // Format test title chain (including suite titles)
-          const titleChain = this.getTitleChain(test);
+        // Format test title chain (including suite titles)
+        const titleChain = this.getTitleChain(test);
 
-          // Get attachments (screenshot and video)
-          const { screenshotHtml, videoHtml } = await this.getAttachmentsHtml(
-            test,
-            result,
-            savedAttachments
-          );
+        // Get attachments (screenshot and video)
+        const { screenshotHtml, videoHtml } = await this.getAttachmentsHtml(
+          test,
+          result,
+          savedAttachments
+        );
 
-          // Format error message with better highlighting
-          const formattedError = this.formatErrorMessage(errorMessage);
+        // Format error message with better highlighting
+        const formattedError = this.formatErrorMessage(errorMessage);
 
-          // Format test steps if available
-          const stepsHtml = this.formatTestSteps(result);
+        // Format test steps if available
+        const stepsHtml = this.formatTestSteps(result);
 
-          // Get retry information
-          const retryInfo =
-            test.retries > 0
-              ? `<div class="retry-info">Retry attempt: ${test.retries}</div>`
-              : "";
+        // Include retry information
+        const retryInfo = result.retry > 0
+          ? `<div class="retry-info">Failed after ${result.retry} retry attempt(s)</div>`
+          : `<div class="retry-info">Failed on first attempt</div>`;
 
-          return `
+        return `
         <div class="test-failure">
           <div class="test-header">
             <h3>❌ Failed Test: ${test.title}</h3>
@@ -362,8 +418,7 @@ export class EmailReporter implements Reporter {
           </div>
         </div>
       `;
-        }
-      )
+      })
     );
 
     // Generate email HTML using the template
@@ -374,20 +429,20 @@ export class EmailReporter implements Reporter {
         ${summarySection}
         
         <div class="failure-details">
-          <h2>Failed Tests (${this.failedTests.length})</h2>
+          <h2>Failed Tests (${failedTests.length})</h2>
           ${failureDetails.join("")}
         </div>
       `,
     });
 
     // Prepare attachments for the email
-    const attachments = await this.prepareEmailAttachments(this.failedTests);
+    const attachments = await this.prepareEmailAttachments(failedTests);
 
     // Send email
     try {
       await mailer.sendEmail(
         recipients,
-        `[TEST FAILURE] ${this.failedTests.length} Playwright test(s) failed`,
+        `[TEST FAILURE] ${failedTests.length} Playwright test(s) failed`,
         emailHtml,
         attachments
       );
@@ -396,13 +451,18 @@ export class EmailReporter implements Reporter {
     }
   }
 
-  private async sendSuccessReport(recipients: string[]) {
+  private async sendSuccessReport(recipients: string[], passedTests: TestResultWithDetails[]) {
     // Create summary section with stats
     const summarySection = this.createSummarySection();
 
     // Create a list of passed tests with basic details
-    const passedTestsHtml = this.passedTests
+    const passedTestsHtml = passedTests
       .map(({ test, result, projectName }) => {
+        // Include retry information for passed tests
+        const retryInfo = result.retry > 0
+          ? `<div class="retry-info">Passed after ${result.retry} retry attempt(s)</div>`
+          : `<div class="retry-info">Passed on first attempt</div>`;
+
         return `
         <div class="test-success">
           <div class="test-header">
@@ -419,6 +479,7 @@ export class EmailReporter implements Reporter {
           test.location.line
         }
           </div>
+          ${retryInfo}
         </div>
       `;
       })
@@ -437,7 +498,7 @@ export class EmailReporter implements Reporter {
         ${summarySection}
         
         <div class="success-details">
-          <h2>Passed Tests (${this.passedTests.length})</h2>
+          <h2>Passed Tests (${passedTests.length})</h2>
           ${passedTestsHtml}
         </div>
       `,
@@ -447,7 +508,7 @@ export class EmailReporter implements Reporter {
     try {
       await mailer.sendEmail(
         recipients,
-        `[TEST SUCCESS] All ${this.passedTests.length} Playwright test(s) passed`,
+        `[TEST SUCCESS] All ${passedTests.length} Playwright test(s) passed`,
         emailHtml
       );
     } catch (error) {
@@ -475,7 +536,7 @@ export class EmailReporter implements Reporter {
         attachments.push({
           filename,
           path: test.savedAttachments.screenshot,
-          cid: `screenshot-${test.test.id}`, // Content ID for embedding in HTML
+          cid: `screenshot-${test.test.id}`,
         });
       }
 
@@ -488,7 +549,7 @@ export class EmailReporter implements Reporter {
         attachments.push({
           filename,
           path: test.savedAttachments.video,
-          cid: `video-${test.test.id}`, // Content ID for embedding in HTML
+          cid: `video-${test.test.id}`,
         });
       }
     }
@@ -582,7 +643,6 @@ export class EmailReporter implements Reporter {
   }
 
   private formatErrorMessage(message: string): string {
-    // Replace ANSI color codes with HTML styling
     return message
       .replace(/\[31m/g, '<span class="highlight-red">')
       .replace(/\[32m/g, '<span class="highlight-green">')
@@ -593,7 +653,6 @@ export class EmailReporter implements Reporter {
   }
 
   private formatStackTrace(stack: string): string {
-    // Highlight file paths and function names in stack trace
     return stack
       .replace(/at\s+(\w+)/g, 'at <span class="highlight">$1</span>')
       .replace(/\(([^)]+)\)/g, '(<span class="highlight">$1</span>)')
@@ -601,7 +660,6 @@ export class EmailReporter implements Reporter {
   }
 
   private formatTestSteps(result: TestResult): string {
-    // If test has steps, format them
     if (!result.steps || result.steps.length === 0) {
       return "";
     }
