@@ -14,6 +14,8 @@ import dotenv from "dotenv";
 // Load environment variables
 dotenv.config();
 
+//# TEST_TEAM_EMAILS=dev@cheerchampion.com{bug}
+
 // Define our own attachment interface since nodemailer types are not working
 interface EmailAttachment {
   filename: string;
@@ -64,8 +66,11 @@ class Mailer {
 }
 
   isConfigured(): boolean {
-    return !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD);
-  }
+  const hasUser = !!process.env.GMAIL_USER;
+  const hasPassword = !!process.env.GMAIL_APP_PASSWORD;
+  console.log(`Email config check - User: ${hasUser}, Password: ${hasPassword}`);
+  return hasUser && hasPassword;
+}
 
   getRecipients(): string[] {
     return process.env.TEST_TEAM_EMAILS?.split(",").filter(Boolean) || [];
