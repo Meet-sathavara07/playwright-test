@@ -1,9 +1,15 @@
-import { Reporter, TestCase, TestResult, FullConfig, Suite } from '@playwright/test/reporter';
-import * as path from 'path';
-import * as fs from 'fs';
-import * as crypto from 'crypto';
-import * as nodemailer from 'nodemailer';
-import dotenv from 'dotenv';
+import {
+  Reporter,
+  TestCase,
+  TestResult,
+  FullConfig,
+  Suite,
+} from "@playwright/test/reporter";
+import * as path from "path";
+import * as fs from "fs";
+import * as crypto from "crypto";
+import * as nodemailer from "nodemailer";
+import dotenv from "dotenv";
 
 // Load environment variables
 dotenv.config();
@@ -38,6 +44,11 @@ class Mailer {
   private transporter: nodemailer.Transporter;
 
   constructor() {
+  console.log('Setting up email transporter');
+  console.log('GMAIL_USER env exists:', !!process.env.GMAIL_USER);
+  console.log('GMAIL_APP_PASSWORD env exists:', !!process.env.GMAIL_APP_PASSWORD);
+  
+  try {
     this.transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
@@ -45,14 +56,19 @@ class Mailer {
         pass: process.env.GMAIL_APP_PASSWORD,
       },
     });
+    console.log('Email transporter created successfully');
+  } catch (error) {
+    console.error('Failed to create email transporter:', error);
+    throw error;
   }
+}
 
   isConfigured(): boolean {
     return !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD);
   }
 
   getRecipients(): string[] {
-    return process.env.TEST_TEAM_EMAILS?.split(',').filter(Boolean) || [];
+    return process.env.TEST_TEAM_EMAILS?.split(",").filter(Boolean) || [];
   }
 
   async sendEmail(
@@ -61,23 +77,43 @@ class Mailer {
     html: string,
     attachments?: nodemailer.Attachment[]
   ): Promise<void> {
+    console.log("Email configuration status:", this.isConfigured());
+    console.log("Email recipients:", recipients);
+    console.log("GMAIL_USER env variable exists:", !!process.env.GMAIL_USER);
+    console.log(
+      "GMAIL_APP_PASSWORD env variable exists:",
+      !!process.env.GMAIL_APP_PASSWORD
+    );
+    console.log(
+      "TEST_TEAM_EMAILS env variable value:",
+      process.env.TEST_TEAM_EMAILS
+    );
+
     if (!this.isConfigured()) {
-      throw new Error('Email configuration is not set up. Please check your .env file.');
+      throw new Error(
+        "Email configuration is not set up. Please check your .env file."
+      );
     }
 
     const mailOptions: nodemailer.SendMailOptions = {
       from: process.env.GMAIL_USER,
-      to: recipients.join(','),
+      to: recipients.join(","),
       subject,
       html,
       attachments,
     };
 
     try {
+      console.log("Attempting to send email with options:", {
+        from: mailOptions.from,
+        to: mailOptions.to,
+        subject: mailOptions.subject,
+        attachmentsCount: mailOptions.attachments?.length || 0,
+      });
       const info = await this.transporter.sendMail(mailOptions);
       console.log(`Email sent successfully: ${info.messageId}`);
     } catch (error) {
-      console.error('Failed to send email:', error);
+      console.error("Failed to send email. Error details:", error);
       throw error;
     }
   }
@@ -100,36 +136,42 @@ export class EmailReporter implements Reporter {
   };
   private startTime: number = 0;
   private config!: FullConfig;
-  private outputDir: string = '';
-  private artifactsDir: string = '';
+  private outputDir: string = "";
+  private artifactsDir: string = "";
 
   onBegin(config: FullConfig, suite: Suite) {
     this.config = config;
     this.startTime = Date.now();
     this.testRunSummary.totalTests = suite.allTests().length;
-    
+
     // Create output directories
-    this.outputDir = path.resolve(process.cwd(), 'test-results');
-    this.artifactsDir = path.join(this.outputDir, 'email-artifacts', Date.now().toString());
-    
+    this.outputDir = path.resolve(process.cwd(), "test-results");
+    this.artifactsDir = path.join(
+      this.outputDir,
+      "email-artifacts",
+      Date.now().toString()
+    );
+
     // Ensure directories exist
     fs.mkdirSync(this.artifactsDir, { recursive: true });
-    console.log(`EmailReporter: Artifacts will be saved to ${this.artifactsDir}`);
+    console.log(
+      `EmailReporter: Artifacts will be saved to ${this.artifactsDir}`
+    );
   }
 
   async onTestEnd(test: TestCase, result: TestResult) {
-    const projectName = test.parent.project()?.name || 'unknown';
+    const projectName = test.parent.project()?.name || "unknown";
     const testInfo: TestResultWithDetails = { test, result, projectName };
-    
+
     // Only save attachments for failed tests
-    if (result.status === 'failed') {
+    if (result.status === "failed") {
       testInfo.savedAttachments = await this.saveAttachments(test, result);
       this.failedTests.push(testInfo);
       this.testRunSummary.failedTests++;
-    } else if (result.status === 'passed') {
+    } else if (result.status === "passed") {
       this.passedTests.push(testInfo);
       this.testRunSummary.passedTests++;
-    } else if (result.status === 'skipped') {
+    } else if (result.status === "skipped") {
       this.skippedTests.push(testInfo);
       this.testRunSummary.skippedTests++;
     }
@@ -138,16 +180,18 @@ export class EmailReporter implements Reporter {
   async onEnd() {
     // Calculate test run duration
     this.testRunSummary.duration = Date.now() - this.startTime;
-    
+
     // Check if email configuration is valid
     if (!mailer.isConfigured()) {
-      console.error('Email configuration is not set up. Make sure GMAIL_USER and GMAIL_APP_PASSWORD are set in .env');
+      console.error(
+        "Email configuration is not set up. Make sure GMAIL_USER and GMAIL_APP_PASSWORD are set in .env"
+      );
       return;
     }
-    
+
     const recipients = mailer.getRecipients();
     if (recipients.length === 0) {
-      console.error('No recipient emails specified. Cannot send test reports.');
+      console.error("No recipient emails specified. Cannot send test reports.");
       return;
     }
 
@@ -159,104 +203,121 @@ export class EmailReporter implements Reporter {
         await this.sendSuccessReport(recipients);
       }
     } catch (error) {
-      console.error('Failed to send email report:', error);
+      console.error("Failed to send email report:", error);
     }
   }
 
-  private async saveAttachments(test: TestCase, result: TestResult): Promise<{ screenshot?: string; video?: string }> {
+  private async saveAttachments(
+    test: TestCase,
+    result: TestResult
+  ): Promise<{ screenshot?: string; video?: string }> {
     const savedPaths: { screenshot?: string; video?: string } = {};
-    
+
     if (!result.attachments || result.attachments.length === 0) {
       return savedPaths;
     }
-    
+
     // Create a unique folder for this test's attachments
-    const testHash = crypto.createHash('md5')
+    const testHash = crypto
+      .createHash("md5")
       .update(`${test.location.file}-${test.title}-${Date.now()}`)
-      .digest('hex')
+      .digest("hex")
       .substring(0, 10);
-      
+
     const testDir = path.join(this.artifactsDir, testHash);
     fs.mkdirSync(testDir, { recursive: true });
-    
+
     // Process and save each attachment
     for (const attachment of result.attachments) {
       if (!attachment.path || !fs.existsSync(attachment.path)) {
         continue;
       }
-      
+
       try {
         const originalExt = path.extname(attachment.path);
-        const fileExt = originalExt || this.getExtensionForContentType(attachment.contentType);
+        const fileExt =
+          originalExt ||
+          this.getExtensionForContentType(attachment.contentType);
         const fileName = `${attachment.name}${fileExt}`;
         const destPath = path.join(testDir, fileName);
-        
+
         // Copy file to our artifacts directory
         fs.copyFileSync(attachment.path, destPath);
         console.log(`Saved ${attachment.name} to ${destPath}`);
-        
+
         // Store the path for the email report
-        if (attachment.name === 'screenshot') {
+        if (attachment.name === "screenshot") {
           savedPaths.screenshot = destPath;
-        } else if (attachment.name === 'video') {
+        } else if (attachment.name === "video") {
           savedPaths.video = destPath;
         }
       } catch (error) {
         console.error(`Failed to save attachment ${attachment.name}:`, error);
       }
     }
-    
+
     return savedPaths;
   }
 
   private getExtensionForContentType(contentType?: string): string {
-    if (!contentType) return '';
-    
+    if (!contentType) return "";
+
     const contentTypeMap: Record<string, string> = {
-      'image/png': '.png',
-      'image/jpeg': '.jpg',
-      'video/webm': '.webm',
-      'video/mp4': '.mp4',
-      'text/plain': '.txt',
-      'text/html': '.html',
-      'application/json': '.json'
+      "image/png": ".png",
+      "image/jpeg": ".jpg",
+      "video/webm": ".webm",
+      "video/mp4": ".mp4",
+      "text/plain": ".txt",
+      "text/html": ".html",
+      "application/json": ".json",
     };
-    
-    return contentTypeMap[contentType] || '';
+
+    return contentTypeMap[contentType] || "";
   }
 
   private async sendFailureReport(recipients: string[]) {
     // Create summary section with stats
     const summarySection = this.createSummarySection();
-    
-    // Create HTML for failed tests with detailed information
-    const failureDetails = await Promise.all(this.failedTests.map(async ({ test, result, projectName, savedAttachments }) => {
-      const error = result.errors[0];
-      const errorMessage = error?.message || 'Unknown error';
-      const stackTrace = error?.stack || 'No stack trace available';
-      
-      // Format test title chain (including suite titles)
-      const titleChain = this.getTitleChain(test);
-      
-      // Get attachments (screenshot and video)
-      const { screenshotHtml, videoHtml } = await this.getAttachmentsHtml(test, result, savedAttachments);
 
-      // Format error message with better highlighting
-      const formattedError = this.formatErrorMessage(errorMessage);
-      
-      // Format test steps if available
-      const stepsHtml = this.formatTestSteps(result);
-      
-      // Get retry information
-      const retryInfo = test.retries > 0 ? `<div class="retry-info">Retry attempt: ${test.retries}</div>` : '';
-      
-      return `
+    // Create HTML for failed tests with detailed information
+    const failureDetails = await Promise.all(
+      this.failedTests.map(
+        async ({ test, result, projectName, savedAttachments }) => {
+          const error = result.errors[0];
+          const errorMessage = error?.message || "Unknown error";
+          const stackTrace = error?.stack || "No stack trace available";
+
+          // Format test title chain (including suite titles)
+          const titleChain = this.getTitleChain(test);
+
+          // Get attachments (screenshot and video)
+          const { screenshotHtml, videoHtml } = await this.getAttachmentsHtml(
+            test,
+            result,
+            savedAttachments
+          );
+
+          // Format error message with better highlighting
+          const formattedError = this.formatErrorMessage(errorMessage);
+
+          // Format test steps if available
+          const stepsHtml = this.formatTestSteps(result);
+
+          // Get retry information
+          const retryInfo =
+            test.retries > 0
+              ? `<div class="retry-info">Retry attempt: ${test.retries}</div>`
+              : "";
+
+          return `
         <div class="test-failure">
           <div class="test-header">
             <h3>❌ Failed Test: ${test.title}</h3>
             <div class="test-meta">
               <span class="project-badge">${projectName}</span>
-              <span class="duration-badge">${this.formatDuration(result.duration)}</span>
+              <span class="duration-badge">${this.formatDuration(
+                result.duration
+              )}</span>
             </div>
           </div>
           
@@ -265,7 +326,9 @@ export class EmailReporter implements Reporter {
           </div>
 
           <div class="test-location">
-            <span class="label">File:</span> ${test.location.file}:${test.location.line}:${test.location.column}
+            <span class="label">File:</span> ${test.location.file}:${
+            test.location.line
+          }:${test.location.column}
           </div>
           
           ${retryInfo}
@@ -275,9 +338,13 @@ export class EmailReporter implements Reporter {
             <div class="error-message">${formattedError}</div>
             <div class="collapsible">
               <input id="stack-${test.id}" class="toggle" type="checkbox">
-              <label for="stack-${test.id}" class="toggle-label">Stack Trace</label>
+              <label for="stack-${
+                test.id
+              }" class="toggle-label">Stack Trace</label>
               <div class="collapsible-content">
-                <div class="stack-trace">${this.formatStackTrace(stackTrace)}</div>
+                <div class="stack-trace">${this.formatStackTrace(
+                  stackTrace
+                )}</div>
               </div>
             </div>
           </div>
@@ -290,20 +357,22 @@ export class EmailReporter implements Reporter {
           </div>
         </div>
       `;
-    }));
+        }
+      )
+    );
 
     // Generate email HTML using the template
     const emailHtml = this.generateEmailTemplate({
       isSuccess: false,
-      title: '❌ Playwright Test Failure Report',
+      title: "❌ Playwright Test Failure Report",
       content: `
         ${summarySection}
         
         <div class="failure-details">
           <h2>Failed Tests (${this.failedTests.length})</h2>
-          ${failureDetails.join('')}
+          ${failureDetails.join("")}
         </div>
-      `
+      `,
     });
 
     // Prepare attachments for the email
@@ -318,36 +387,42 @@ export class EmailReporter implements Reporter {
         attachments
       );
     } catch (error) {
-      console.error('Failed to send failure report email:', error);
+      console.error("Failed to send failure report email:", error);
     }
   }
 
   private async sendSuccessReport(recipients: string[]) {
     // Create summary section with stats
     const summarySection = this.createSummarySection();
-    
+
     // Create a list of passed tests with basic details
-    const passedTestsHtml = this.passedTests.map(({ test, result, projectName }) => {
-      return `
+    const passedTestsHtml = this.passedTests
+      .map(({ test, result, projectName }) => {
+        return `
         <div class="test-success">
           <div class="test-header">
             <h3>✅ ${test.title}</h3>
             <div class="test-meta">
               <span class="project-badge">${projectName}</span>
-              <span class="duration-badge">${this.formatDuration(result.duration)}</span>
+              <span class="duration-badge">${this.formatDuration(
+                result.duration
+              )}</span>
             </div>
           </div>
           <div class="test-location">
-            <span class="label">File:</span> ${test.location.file}:${test.location.line}
+            <span class="label">File:</span> ${test.location.file}:${
+          test.location.line
+        }
           </div>
         </div>
       `;
-    }).join('');
+      })
+      .join("");
 
     // Generate email HTML using the template
     const emailHtml = this.generateEmailTemplate({
       isSuccess: true,
-      title: '✅ Playwright Test Success Report',
+      title: "✅ Playwright Test Success Report",
       content: `
         <div class="success-message">
           <h2>All Tests Passed Successfully! 🎉</h2>
@@ -360,7 +435,7 @@ export class EmailReporter implements Reporter {
           <h2>Passed Tests (${this.passedTests.length})</h2>
           ${passedTestsHtml}
         </div>
-      `
+      `,
     });
 
     // Send email (no attachments for success report)
@@ -371,38 +446,48 @@ export class EmailReporter implements Reporter {
         emailHtml
       );
     } catch (error) {
-      console.error('Failed to send success report email:', error);
+      console.error("Failed to send success report email:", error);
     }
   }
 
-  private async prepareEmailAttachments(tests: TestResultWithDetails[]): Promise<EmailAttachment[]> {
+  private async prepareEmailAttachments(
+    tests: TestResultWithDetails[]
+  ): Promise<EmailAttachment[]> {
     const attachments: EmailAttachment[] = [];
-    
+
     // Process saved attachments from failed tests
     for (const test of tests) {
       if (!test.savedAttachments) continue;
-      
+
       // Add screenshot as attachment if it exists
-      if (test.savedAttachments.screenshot && fs.existsSync(test.savedAttachments.screenshot)) {
-        const filename = `screenshot-${path.basename(test.savedAttachments.screenshot)}`;
+      if (
+        test.savedAttachments.screenshot &&
+        fs.existsSync(test.savedAttachments.screenshot)
+      ) {
+        const filename = `screenshot-${path.basename(
+          test.savedAttachments.screenshot
+        )}`;
         attachments.push({
           filename,
           path: test.savedAttachments.screenshot,
-          cid: `screenshot-${test.test.id}` // Content ID for embedding in HTML
+          cid: `screenshot-${test.test.id}`, // Content ID for embedding in HTML
         });
       }
-      
+
       // Add video as attachment if it exists
-      if (test.savedAttachments.video && fs.existsSync(test.savedAttachments.video)) {
+      if (
+        test.savedAttachments.video &&
+        fs.existsSync(test.savedAttachments.video)
+      ) {
         const filename = `video-${path.basename(test.savedAttachments.video)}`;
         attachments.push({
           filename,
           path: test.savedAttachments.video,
-          cid: `video-${test.test.id}` // Content ID for embedding in HTML
+          cid: `video-${test.test.id}`, // Content ID for embedding in HTML
         });
       }
     }
-    
+
     return attachments;
   }
 
@@ -448,17 +533,17 @@ export class EmailReporter implements Reporter {
       if (suite.title) titles.unshift(suite.title);
       suite = suite.parent;
     }
-    return titles.length > 0 ? titles.join(' > ') : 'Root Suite';
+    return titles.length > 0 ? titles.join(" > ") : "Root Suite";
   }
 
   private async getAttachmentsHtml(
     test: TestCase,
-    result: TestResult, 
+    result: TestResult,
     savedAttachments?: { screenshot?: string; video?: string }
-  ): Promise<{ screenshotHtml: string, videoHtml: string }> {
-    let screenshotHtml = '';
-    let videoHtml = '';
-    
+  ): Promise<{ screenshotHtml: string; videoHtml: string }> {
+    let screenshotHtml = "";
+    let videoHtml = "";
+
     if (savedAttachments) {
       // Generate HTML for screenshot
       if (savedAttachments.screenshot) {
@@ -469,7 +554,7 @@ export class EmailReporter implements Reporter {
           </div>
         `;
       }
-      
+
       // Generate HTML for video
       if (savedAttachments.video) {
         videoHtml = `
@@ -487,7 +572,7 @@ export class EmailReporter implements Reporter {
         `;
       }
     }
-    
+
     return { screenshotHtml, videoHtml };
   }
 
@@ -496,10 +581,10 @@ export class EmailReporter implements Reporter {
     return message
       .replace(/\[31m/g, '<span class="highlight-red">')
       .replace(/\[32m/g, '<span class="highlight-green">')
-      .replace(/\[39m/g, '</span>')
+      .replace(/\[39m/g, "</span>")
       .replace(/\[2m/g, '<span style="opacity: 0.7;">')
-      .replace(/\[22m/g, '</span>')
-      .replace(/\n/g, '<br>');
+      .replace(/\[22m/g, "</span>")
+      .replace(/\n/g, "<br>");
   }
 
   private formatStackTrace(stack: string): string {
@@ -507,20 +592,24 @@ export class EmailReporter implements Reporter {
     return stack
       .replace(/at\s+(\w+)/g, 'at <span class="highlight">$1</span>')
       .replace(/\(([^)]+)\)/g, '(<span class="highlight">$1</span>)')
-      .replace(/\n/g, '<br>');
+      .replace(/\n/g, "<br>");
   }
 
   private formatTestSteps(result: TestResult): string {
     // If test has steps, format them
     if (!result.steps || result.steps.length === 0) {
-      return '';
+      return "";
     }
-    
-    const stepsHtml = result.steps.map((step, index) => {
-      const status = step.error ? '❌' : '✅';
-      return `<div class="test-step">${status} ${index + 1}. ${step.title} (${this.formatDuration(step.duration)})</div>`;
-    }).join('');
-    
+
+    const stepsHtml = result.steps
+      .map((step, index) => {
+        const status = step.error ? "❌" : "✅";
+        return `<div class="test-step">${status} ${index + 1}. ${
+          step.title
+        } (${this.formatDuration(step.duration)})</div>`;
+      })
+      .join("");
+
     return `
       <div class="test-steps">
         <h4>Test Steps:</h4>
@@ -529,9 +618,17 @@ export class EmailReporter implements Reporter {
     `;
   }
 
-  private generateEmailTemplate({ isSuccess, title, content }: { isSuccess: boolean, title: string, content: string }): string {
-    const primaryColor = isSuccess ? '#2a9d8f' : '#e63946';
-    
+  private generateEmailTemplate({
+    isSuccess,
+    title,
+    content,
+  }: {
+    isSuccess: boolean;
+    title: string;
+    content: string;
+  }): string {
+    const primaryColor = isSuccess ? "#2a9d8f" : "#e63946";
+
     return `
       <!DOCTYPE html>
       <html>
@@ -654,7 +751,9 @@ export class EmailReporter implements Reporter {
             margin-bottom: 20px;
             padding: 15px;
             border-radius: 5px;
-            border-left: 4px solid ${isSuccess ? 'var(--success-color)' : 'var(--error-text)'};
+            border-left: 4px solid ${
+              isSuccess ? "var(--success-color)" : "var(--error-text)"
+            };
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
           }
           
@@ -669,7 +768,7 @@ export class EmailReporter implements Reporter {
           
           .test-header h3 {
             margin: 0;
-            color: ${isSuccess ? 'var(--success-color)' : 'var(--error-text)'};
+            color: ${isSuccess ? "var(--success-color)" : "var(--error-text)"};
             font-size: 18px;
             text-align: left;
           }
@@ -849,7 +948,9 @@ export class EmailReporter implements Reporter {
           <div class="footer">
             <p>This is an automated message from the Playwright Test Runner.</p>
             <p>Generated on: ${new Date().toLocaleString()}</p>
-            <p>Test run completed in: ${this.formatDuration(this.testRunSummary.duration)}</p>
+            <p>Test run completed in: ${this.formatDuration(
+              this.testRunSummary.duration
+            )}</p>
           </div>
         </div>
       </body>
